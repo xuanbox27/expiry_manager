@@ -61,14 +61,15 @@ onMounted(fetchUnreadCount)
 
 .badge {
   position: absolute;
-  top: -6px;
-  right: -10px;
-  background: var(--danger);
+  top: -4px;
+  right: -8px;
+  background: var(--primary);
   color: white;
-  font-size: 10px;
-  padding: 2px 5px;
-  border-radius: 10px;
-  min-width: 16px;
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 12px;
+  min-width: 20px;
   text-align: center;
+  font-weight: 600;
 }
 </style>
