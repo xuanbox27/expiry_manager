@@ -1,0 +1,4 @@
+{"$$indexCreated":{"fieldName":"family_code","unique":false,"sparse":false}}
+{"$$indexCreated":{"fieldName":"user_id","unique":false,"sparse":false}}
+{"$$indexCreated":{"fieldName":"family_code"}}
+{"$$indexCreated":{"fieldName":"user_id"}}

@@ -1,0 +1,4 @@
+{"email":"3136530063@qq.com","password_hash":"$2b$10$DUC1hiMw50aeP8.T3ThDC.O4TrN/p2AUXY/BcfgvcGVztpCe./XGa","nickname":"ljx","family_code":"358883C3","email_notifications":true,"created_at":"2026-04-16T01:10:34.216Z","_id":"ZO4uftYK4rFI3tDO"}
+{"$$indexCreated":{"fieldName":"email","unique":true,"sparse":false}}
+{"$$indexCreated":{"fieldName":"email","unique":true}}
+{"email":"3136530063@qq.com","password_hash":"$2b$10$DUC1hiMw50aeP8.T3ThDC.O4TrN/p2AUXY/BcfgvcGVztpCe./XGa","nickname":"ljx","family_code":"358883C3","email_notifications":true,"created_at":"2026-04-16T01:10:34.216Z","_id":"ZO4uftYK4rFI3tDO"}

@@ -1,0 +1,8 @@
+{"$$indexCreated":{"fieldName":"user_id","unique":false,"sparse":false}}
+{"$$indexCreated":{"fieldName":"expiry_date","unique":false,"sparse":false}}
+{"$$indexCreated":{"fieldName":"user_id"}}
+{"$$indexCreated":{"fieldName":"expiry_date"}}
+{"user_id":"ZO4uftYK4rFI3tDO","barcode":null,"name":"沃集鲜盒装牛奶","category":"乳制品","expiry_date":"2026-12-16","notes":null,"status":"active","added_at":"2026-04-16T06:57:02.093Z","updated_at":"2026-04-16T06:57:02.093Z","_id":"9pyBdy0TIcCe7SlD"}
+{"user_id":"ZO4uftYK4rFI3tDO","barcode":null,"name":"moody美瞳隐形眼镜","category":"化妆品","expiry_date":"2026-06-07","notes":null,"status":"active","added_at":"2026-04-16T06:58:58.402Z","updated_at":"2026-04-16T06:58:58.402Z","_id":"mSLgFixgd2zo9rBq"}
+{"user_id":"ZO4uftYK4rFI3tDO","barcode":null,"name":"南瓜面包","category":"食品","expiry_date":"2026-04-30","notes":"4.15购买，有限保质期15天","status":"active","added_at":"2026-04-16T07:05:08.928Z","updated_at":"2026-04-16T07:05:08.928Z","_id":"0e7rVfRAj7WmzYPT"}
+{"user_id":"ZO4uftYK4rFI3tDO","barcode":null,"name":"布洛芬","category":"药品","expiry_date":"2025-11-14","notes":null,"status":"active","added_at":"2026-04-16T07:37:06.116Z","updated_at":"2026-04-16T07:37:06.116Z","_id":"MMP29e8WSRqoqu92"}
