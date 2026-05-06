@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(authenticateToken);
 
 router.get('/', (req, res) => {
-  const { status, category } = req.query;
+  const { status, category, expiring, days } = req.query;
 
   const user = users.findOne({ _id: req.user.id });
 
@@ -29,16 +29,31 @@ router.get('/', (req, res) => {
       return res.status(500).json({ error: 'Failed to get items' });
     }
 
-    const result = docs || [];
+    let result = docs || [];
 
-    const enriched = result.map(item => {
+    result = result.map(item => {
       const owner = users.findOne({ _id: item.user_id });
       return { ...item, id: item._id, owner_name: owner?.nickname };
     });
 
-    enriched.sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
+    // 如果请求即将过期物品，则本地过滤
+    if (expiring === 'true') {
+      const daysNum = parseInt(days) || 3;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const later = new Date(today);
+      later.setDate(today.getDate() + daysNum);
 
-    res.json(enriched);
+      result = result.filter(item => {
+        if (item.status !== 'active') return false;
+        const expDate = new Date(item.expiry_date);
+        return expDate >= today && expDate <= later;
+      });
+    }
+
+    result.sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
+
+    res.json(result);
   });
 });
 
