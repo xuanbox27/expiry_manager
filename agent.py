@@ -4,25 +4,34 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# 加载环境变量
+# 加载项目根目录下的 .env 文件（用于读取 USER_TOKEN 等其他变量）
 load_dotenv()
 
-# 初始化 OpenAI 客户端（兼容 DeepSeek、Qwen 等）
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("OPENAI_BASE_URL")  # 如果为空则使用官方 OpenAI
-)
+# 硬编码 OpenAI 客户端配置（阿里云 DashScope 兼容模式）
+api_key = "sk-0c2ecd839a7b4b08bfa4cdaa9a27b017"  # 与 test_qwen.py 一致
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:3000")
-USER_TOKEN = os.getenv("USER_TOKEN")
+# 读取其他环境变量
+model = os.getenv("MODEL", "qwen-plus")
+api_base_url = os.getenv("API_BASE_URL", "http://localhost:3000")
+user_token = os.getenv("USER_TOKEN")
 
-if not USER_TOKEN:
-    print("错误：未找到 USER_TOKEN。请先在 .env 中设置，或运行脚本获取 token。")
+# 检查必需的环境变量
+if not user_token:
+    print("错误：未找到 USER_TOKEN。请在 .env 文件中设置，或运行脚本获取 token。")
+    print("提示：登录后从浏览器 Local Storage 中复制 token，或执行：")
+    print('curl -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d "{\"email\":\"你的邮箱\",\"password\":\"你的密码\"}"')
     exit(1)
+
+# 初始化 OpenAI 客户端（硬编码参数，与 test_qwen.py 方式一致）
+client = OpenAI(
+    api_key=api_key,
+    base_url=base_url
+)
 
 # 请求头
 HEADERS = {
-    "Authorization": f"Bearer {USER_TOKEN}",
+    "Authorization": f"Bearer {user_token}",
     "Content-Type": "application/json"
 }
 
@@ -97,7 +106,7 @@ functions = [
 # -------------------- Function 实现 --------------------
 def get_all_items():
     try:
-        resp = requests.get(f"{API_BASE_URL}/api/items", headers=HEADERS)
+        resp = requests.get(f"{api_base_url}/api/items", headers=HEADERS)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.RequestException as e:
@@ -107,16 +116,14 @@ def get_all_items():
 
 def get_expiring_items(days=3):
     try:
-        # 后端已支持 expiring 参数，如不支持可在本地过滤
         resp = requests.get(
-            f"{API_BASE_URL}/api/items",
+            f"{api_base_url}/api/items",
             params={"expiring": "true", "days": days},
             headers=HEADERS
         )
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.RequestException as e:
-        # 如果后端不支持 expiring 参数，则本地过滤
         if hasattr(e, 'response') and e.response is not None:
             if e.response.status_code == 400:
                 return local_filter_expiring(days)
@@ -167,7 +174,7 @@ def add_item(name, expire_date, category=None, purchase_date=None, shelf_life_da
 
     try:
         resp = requests.post(
-            f"{API_BASE_URL}/api/items",
+            f"{api_base_url}/api/items",
             headers=HEADERS,
             json=payload
         )
@@ -181,7 +188,7 @@ def add_item(name, expire_date, category=None, purchase_date=None, shelf_life_da
 def delete_item(item_id):
     try:
         resp = requests.delete(
-            f"{API_BASE_URL}/api/items/{item_id}",
+            f"{api_base_url}/api/items/{item_id}",
             headers=HEADERS
         )
         if resp.status_code == 401:
@@ -218,7 +225,7 @@ def handle_function_call(name, args):
 # -------------------- 主对话循环 --------------------
 def main():
     print("=" * 50)
-    print("   保质期管家 AI Agent")
+    print("   保质期管家 AI Agent (阿里云 DashScope 硬编码模式)")
     print("   输入 'exit' 或 'quit' 退出")
     print("=" * 50)
     print()
@@ -227,7 +234,7 @@ def main():
         {
             "role": "system",
             "content": """你是保质期管家的 AI 助手，帮助用户管理他们的物品保质期。
-你可以通过 function calling 来操作用户的物品数据。
+你可以通过 function calling 来操作用戶的物品数据。
 当用户询问即将过期的物品时，使用 get_expiring_items。
 当用户想添加物品时，确认所有必要信息后使用 add_item。
 当用户想删除物品时，先搜索找到物品 ID，再使用 delete_item。
@@ -252,7 +259,7 @@ def main():
 
         try:
             response = client.chat.completions.create(
-                model=os.getenv("MODEL", "gpt-3.5-turbo"),
+                model=model,
                 messages=messages,
                 functions=functions,
                 function_call="auto",
@@ -262,7 +269,7 @@ def main():
             message = response.choices[0].message
 
             # 如果有 function call
-            if message.function_call:
+            if hasattr(message, 'function_call') and message.function_call:
                 func_name = message.function_call.name
                 func_args = json.loads(message.function_call.arguments)
 
@@ -286,7 +293,7 @@ def main():
 
                 # 再次请求，让 AI 总结结果
                 second_resp = client.chat.completions.create(
-                    model=os.getenv("MODEL", "gpt-3.5-turbo"),
+                    model=model,
                     messages=messages,
                     temperature=0.2
                 )
@@ -300,9 +307,10 @@ def main():
                 messages.append({"role": "assistant", "content": reply})
 
         except Exception as e:
-            print(f"错误: {str(e)}")
+            error_msg = str(e)
+            print(f"错误: {error_msg}")
             # 如果 token 过期，提示用户
-            if "401" in str(e) or "unauthorized" in str(e).lower():
+            if "401" in error_msg or "unauthorized" in error_msg.lower():
                 print("提示：Token 可能已过期，请更新 .env 中的 USER_TOKEN")
 
 if __name__ == "__main__":
