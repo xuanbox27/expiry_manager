@@ -1,3 +1,22 @@
+# 环境变量
 .env
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+venv/
+.venv/
+
+# 数据库（如果有）
+*.db
+server/data/*.db
+
+# IDE 和系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
