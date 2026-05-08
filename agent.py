@@ -5,31 +5,34 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 from pathlib import Path
+from datetime import datetime, timedelta
 
-# 修复 Windows 下中文编码问题
-sys.stdout = open(sys.stdout.fileno(), 'w', encoding='utf-8', buffering=1)
-sys.stderr = open(sys.stderr.fileno(), 'w', encoding='utf-8', buffering=1)
+# 修复 Windows 中文编码
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 
-# 强制重新加载 .env 文件
+# 加载 .env 文件
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path, override=True)
 
 # 读取配置
-api_base_url = os.getenv("API_BASE_URL", "http://localhost:3000")
-user_token = os.getenv("USER_TOKEN")
-provider = os.getenv("LLM_PROVIDER", "dashscope").lower()
-
-print(f"[初始化] 提供商: {provider}")
-print(f"[初始化] .env 文件: {env_path} (存在: {env_path.exists()})")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:3000")
+USER_TOKEN = os.getenv("USER_TOKEN")
 
 # 检查必需配置
-if not user_token:
-    print("错误：未找到 USER_TOKEN")
+if not USER_TOKEN:
+    print("错误：未找到 USER_TOKEN，请在 .env 中设置")
     exit(1)
 
-# 初始化 LLM 客户端
+# 初始化 LLM 客户端 - 默认使用硅基流动
 def init_llm():
-    if provider == "zhipu":
+    provider = os.getenv("LLM_PROVIDER", "siliconflow").lower()
+    
+    if provider == "siliconflow":
+        api_key = os.getenv("SILICONFLOW_API_KEY")
+        base_url = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1")
+        model = os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen3-8B")
+    elif provider == "zhipu":
         api_key = os.getenv("ZHIPU_API_KEY")
         base_url = os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
         model = os.getenv("ZHIPU_MODEL", "glm-4-flash")
@@ -37,40 +40,37 @@ def init_llm():
         api_key = os.getenv("DASHSCOPE_API_KEY")
         base_url = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
         model = os.getenv("DASHSCOPE_MODEL", "qwen-plus")
-    elif provider == "siliconflow":
-        api_key = os.getenv("SILICON_API_KEY")          # ← 必须是 SILICON_API_KEY
-        base_url = os.getenv("SILICON_BASE_URL", "https://api.siliconflow.cn/v1")
-        model = os.getenv("SILICON_MODEL", "Qwen/Qwen3-8B")
     else:
         raise ValueError(f"不支持的提供商: {provider}")
     
     if not api_key:
-        raise ValueError(f"缺少 API Key")
+        raise ValueError(f"缺少 {provider.upper()}_API_KEY")
     
+    print(f"[初始化] 提供商: {provider}")
     print(f"[初始化] 模型: {model}")
     print(f"[初始化] Base URL: {base_url}")
     
-    return OpenAI(api_key=api_key, base_url=base_url), model
+    return OpenAI(api_key=api_key, base_url=base_url), model, provider
 
 try:
-    llm_client, llm_model = init_llm()
+    llm_client, llm_model, current_provider = init_llm()
 except Exception as e:
     print(f"LLM 初始化失败: {e}")
     exit(1)
 
 # 请求头
 HEADERS = {
-    "Authorization": f"Bearer {user_token}",
+    "Authorization": f"Bearer {USER_TOKEN}",
     "Content-Type": "application/json"
 }
 
-# -------------------- Tools 定义 --------------------
+# -------------------- Tools 定义（OpenAI 新格式） --------------------
 tools = [
     {
         "type": "function",
         "function": {
             "name": "get_all_items",
-            "description": "获取当前用户的所有物品列表",
+            "description": "获取当前用户的所有物品列表（包含已共享的家庭物品）",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -86,7 +86,11 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "days": {"type": "integer", "description": "天数阈值", "default": 3}
+                    "days": {
+                        "type": "integer",
+                        "description": "天数阈值，默认3天",
+                        "default": 3
+                    }
                 },
                 "required": []
             }
@@ -96,11 +100,14 @@ tools = [
         "type": "function",
         "function": {
             "name": "search_items",
-            "description": "按关键词搜索物品",
+            "description": "按关键词搜索物品名称",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "keyword": {"type": "string", "description": "搜索关键词"}
+                    "keyword": {
+                        "type": "string",
+                        "description": "搜索关键词，如'牛奶'、'面包'"
+                    }
                 },
                 "required": ["keyword"]
             }
@@ -110,15 +117,15 @@ tools = [
         "type": "function",
         "function": {
             "name": "add_item",
-            "description": "添加新物品",
+            "description": "添加新物品到保质期管家",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string"},
-                    "expiry_date": {"type": "string", "description": "YYYY-MM-DD"},
-                    "category": {"type": "string"},
-                    "purchase_date": {"type": "string"},
-                    "shelf_life_days": {"type": "integer"}
+                    "name": {"type": "string", "description": "物品名称"},
+                    "expiry_date": {"type": "string", "description": "过期日期 YYYY-MM-DD"},
+                    "category": {"type": "string", "description": "分类（可选）"},
+                    "purchase_date": {"type": "string", "description": "购买日期 YYYY-MM-DD（可选）"},
+                    "shelf_life_days": {"type": "integer", "description": "保质期天数（可选）"}
                 },
                 "required": ["name", "expiry_date"]
             }
@@ -128,11 +135,11 @@ tools = [
         "type": "function",
         "function": {
             "name": "delete_item",
-            "description": "删除物品",
+            "description": "删除指定物品（需要提供物品ID）",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "item_id": {"type": "string"}
+                    "item_id": {"type": "string", "description": "物品ID"}
                 },
                 "required": ["item_id"]
             }
@@ -140,92 +147,61 @@ tools = [
     }
 ]
 
-# -------------------- Function 实现（简化版） --------------------
-def call_api(method, endpoint, **kwargs):
+# -------------------- Function 实现 --------------------
+def api_request(method, endpoint, **kwargs):
     """统一 API 调用"""
     try:
         resp = requests.request(
             method=method,
-            url=f"{api_base_url}{endpoint}",
+            url=f"{API_BASE_URL}{endpoint}",
             headers=HEADERS,
             **kwargs
         )
         if resp.status_code == 401:
-            return {"error": "Token 已过期"}
+            return {"error": "Token 已过期，请重新登录获取新的 USER_TOKEN"}
         resp.raise_for_status()
         return resp.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": f"网络错误: {str(e)}"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"未知错误: {str(e)}"}
 
 def get_all_items():
-    return call_api("GET", "/api/items")
+    return api_request("GET", "/api/items")
 
 def get_expiring_items(days=3):
-    return call_api("GET", "/api/items", params={"expiring": "true", "days": days})
+    return api_request("GET", "/api/items", params={"expiring": "true", "days": days})
 
 def search_items(keyword):
     items = get_all_items()
     if isinstance(items, dict) and "error" in items:
         return items
-    return [i for i in items if keyword.lower() in i.get("name", "").lower()]
+    keyword_lower = keyword.lower()
+    return [item for item in items if keyword_lower in item.get("name", "").lower()]
 
-def add_item(name, expiry_date, **kwargs):
-    payload = {"name": name, "expiry_date": expiry_date}
-    for k in ["category", "purchase_date", "shelf_life_days"]:
-        if k in kwargs and kwargs[k]:
-            payload[k] = kwargs[k]
-    
-    # 如果提供了购买日期和保质期，计算过期日期
-    if "purchase_date" in payload and "shelf_life_days" in payload:
-        from datetime import datetime, timedelta
+def add_item(name, expiry_date, category=None, purchase_date=None, shelf_life_days=None):
+    # 如果提供了 purchase_date 和 shelf_life_days，则计算 expiry_date
+    if purchase_date and shelf_life_days:
         try:
-            purchase = datetime.strptime(payload["purchase_date"], "%Y-%m-%d")
-            expiry = purchase + timedelta(days=payload["shelf_life_days"])
-            payload["expiry_date"] = expiry.strftime("%Y-%m-%d")
-            # 移除临时字段
-            del payload["purchase_date"]
-            del payload["shelf_life_days"]
-        except:
-            pass
-    
-    return call_api("POST", "/api/items", json=payload)
-import os
-from dotenv import load_dotenv
-from openai import OpenAI
+            purchase = datetime.strptime(purchase_date, "%Y-%m-%d")
+            expiry = purchase + timedelta(days=shelf_life_days)
+            expiry_date = expiry.strftime("%Y-%m-%d")
+        except Exception as e:
+            return {"error": f"日期计算失败: {str(e)}"}
+        # 清除临时字段
+        purchase_date = None
+        shelf_life_days = None
 
-# 加载 .env 文件
-load_dotenv()
+    payload = {"name": name, "expiry_date": expiry_date}
+    if category:
+        payload["category"] = category
 
-# 通用配置
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "dashscope").lower()
+    return api_request("POST", "/api/items", json=payload)
 
-# 硅基流动（SiliconFlow）默认值
-DEFAULT_SILICON_API_KEY = "sk-viconoqwarvbowmxwsmzrydgvritpwmwcdvuquiougsrtfzy"
-DEFAULT_SILICON_BASE_URL = "https://api.siliconflow.cn/v1"
-DEFAULT_SILICON_MODEL = "Qwen/Qwen3-8B"
-
-# 根据 LLM_PROVIDER 选择配置
-if LLM_PROVIDER == "zhipu":
-    api_key = os.getenv("ZHIPU_API_KEY")
-    base_url = os.getenv("ZHIPU_BASE_URL")
-    model = os.getenv("ZHIPU_MODEL")
-elif LLM_PROVIDER == "dashscope":
-    api_key = os.getenv("DASHSCOPE_API_KEY")
-    base_url = os.getenv("DASHSCOPE_BASE_URL")
-    model = os.getenv("DASHSCOPE_MODEL")
-elif LLM_PROVIDER == "siliconflow":
-    api_key = os.getenv("SILICON_API_KEY", DEFAULT_SILICON_API_KEY)
-    base_url = os.getenv("SILICON_BASE_URL", DEFAULT_SILICON_BASE_URL)
-    model = os.getenv("SILICON_MODEL", DEFAULT_SILICON_MODEL)
-else:
-    raise ValueError(f"不支持的 LLM_PROVIDER: {LLM_PROVIDER}")
-
-# 创建 OpenAI 客户端
-client = OpenAI(api_key=api_key, base_url=base_url)
 def delete_item(item_id):
-    return call_api("DELETE", f"/api/items/{item_id}")
+    return api_request("DELETE", f"/api/items/{item_id}")
 
-# -------------------- 工具调用处理 --------------------
+# -------------------- Function 调用分发 --------------------
 def handle_tool_call(tool_call):
     """处理单个工具调用"""
     func_name = tool_call.function.name
@@ -234,7 +210,7 @@ def handle_tool_call(tool_call):
     except:
         return {"error": "参数解析失败"}
     
-    print(f"[工具调用] {func_name}")
+    print(f"\n[工具调用] {func_name}")
     print(f"[参数] {func_args}")
     
     # 调用对应函数
@@ -260,19 +236,30 @@ def handle_tool_call(tool_call):
     print(f"[结果] {json.dumps(result, ensure_ascii=False)[:200]}")
     return result
 
-# -------------------- 主循环 --------------------
+# -------------------- 主对话循环 --------------------
 def main():
     print("=" * 50)
     print("   保质期管家 AI Agent")
-    print(f"   提供商: {provider} | 模型: {llm_model}")
-    print("   输入 'exit' 退出，输入 'debug' 切换调试模式")
+    print(f"   提供商: {current_provider}")
+    print(f"   模型: {llm_model}")
+    print("   输入 'exit' 或 'quit' 退出")
+    print("   输入 'debug' 切换调试模式")
     print("=" * 50)
     print()
     
     messages = [
-        {"role": "system", "content": "你是保质期管家 AI，帮助用户管理物品。使用工具操作数据。"}
+        {
+            "role": "system",
+            "content": """你是保质期管家的 AI 助手，帮助用户管理他们的物品保质期。
+你可以通过工具调用来操作用户的物品数据。
+当用户询问即将过期的物品时，使用 get_expiring_items 工具。
+当用户想添加物品时，确认所有必要信息后使用 add_item 工具。
+当用户想删除物品时，先搜索找到物品 ID，再使用 delete_item 工具。
+保持回复简洁友好，使用中文。"""
+        }
     ]
-    debug_mode = True  # 默认开启调试
+    
+    debug_mode = True
     
     while True:
         try:
@@ -281,7 +268,7 @@ def main():
             print("\n再见！")
             break
         
-        if user_input.lower() in ["exit", "quit", "退出"]:
+        if user_input.lower() in ["exit", "quit", "退出", "bye"]:
             print("再见！")
             break
         if user_input.lower() == "debug":
@@ -295,7 +282,7 @@ def main():
         
         try:
             if debug_mode:
-                print(f"\n[调试] 发送请求...")
+                print(f"\n[调试] 发送请求到模型...")
             
             # 第一次调用：获取工具调用
             response = llm_client.chat.completions.create(
@@ -313,18 +300,18 @@ def main():
                 if message.content:
                     print(f"[调试] 文本内容: {message.content[:100]}")
                 if hasattr(message, 'tool_calls') and message.tool_calls:
-                    print(f"[调试] 工具调用数: {len(message.tool_calls)}")
+                    print(f"[调试] 检测到 {len(message.tool_calls)} 个工具调用")
             
-            # 处理工具调用
+            # 处理工具调用（新格式 tool_calls）
             if hasattr(message, 'tool_calls') and message.tool_calls:
-                # 添加 assistant 消息
-                messages.append({
+                # 添加 assistant 消息（包含 tool_calls）
+                assistant_msg = {
                     "role": "assistant",
                     "content": message.content,
                     "tool_calls": [
                         {
                             "id": tc.id,
-                            "type": tc.type,
+                            "type": "function",
                             "function": {
                                 "name": tc.function.name,
                                 "arguments": tc.function.arguments
@@ -332,7 +319,8 @@ def main():
                         }
                         for tc in message.tool_calls
                     ]
-                })
+                }
+                messages.append(assistant_msg)
                 
                 # 执行所有工具调用
                 for tool_call in message.tool_calls:
@@ -357,6 +345,42 @@ def main():
                 print(f"AI: {reply}")
                 messages.append({"role": "assistant", "content": reply})
             
+            # 兼容旧格式（function_call）
+            elif hasattr(message, 'function_call') and message.function_call:
+                func_name = message.function_call.name
+                func_args = json.loads(message.function_call.arguments)
+                
+                print(f"[工具调用] {func_name}")
+                result = handle_tool_call(type('ToolCall', (), {
+                    'function': type('Function', (), {
+                        'name': func_name,
+                        'arguments': json.dumps(func_args, ensure_ascii=False)
+                    })()
+                })())
+                
+                messages.append({
+                    "role": "assistant",
+                    "content": None,
+                    "function_call": {
+                        "name": func_name,
+                        "arguments": json.dumps(func_args, ensure_ascii=False)
+                    }
+                })
+                messages.append({
+                    "role": "function",
+                    "name": func_name,
+                    "content": json.dumps(result, ensure_ascii=False)
+                })
+                
+                second_resp = llm_client.chat.completions.create(
+                    model=llm_model,
+                    messages=messages,
+                    temperature=0.2
+                )
+                reply = second_resp.choices[0].message.content
+                print(f"AI: {reply}")
+                messages.append({"role": "assistant", "content": reply})
+            
             else:
                 # 没有工具调用
                 reply = message.content
@@ -366,63 +390,19 @@ def main():
             print()
         
         except Exception as e:
-            print(f"错误: {e}")
+            error_msg = str(e)
+            print(f"错误: {error_msg}")
+            
             if debug_mode:
                 import traceback
                 traceback.print_exc()
-
-def test_tool_calling():
-    """测试工具调用是否工作"""
-    print("=" * 50)
-    print("   测试模式：验证工具调用")
-    print("=" * 50)
-    
-    # 测试1：查看所有物品
-    print("\n[测试1] 发送：查看我的所有物品")
-    messages = [
-        {"role": "system", "content": "你是保质期管家 AI，有工具可以调用。"},
-        {"role": "user", "content": "查看我的所有物品"}
-    ]
-    
-    try:
-        response = llm_client.chat.completions.create(
-            model=llm_model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-            temperature=0.2
-        )
-        
-        message = response.choices[0].message
-        print(f"模型回复: {message.content[:200] if message.content else '(无文本内容)'}")
-        
-        if hasattr(message, 'tool_calls') and message.tool_calls:
-            print(f"✓ 检测到 {len(message.tool_calls)} 个工具调用：")
-            for tc in message.tool_calls:
-                args = json.loads(tc.function.arguments)
-                print(f"  - {tc.function.name}({args})")
             
-            # 执行工具
-            print("\n执行工具...")
-            for tc in message.tool_calls:
-                result = handle_tool_call(tc)
-                print(f"工具结果: {json.dumps(result, ensure_ascii=False)[:200]}")
-            
-            print("\n✓ 工具调用测试通过！")
-        else:
-            print("✗ 没有检测到工具调用，模型可能不支持或prompt需要优化")
-            print("建议：检查模型是否支持工具调用，或尝试其他模型")
-        
-    except Exception as e:
-        print(f"✗ 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    print("\n" + "=" * 50)
+            if "401" in error_msg or "unauthorized" in error_msg.lower():
+                print("提示：API Key 可能无效或已过期")
+            elif "quota" in error_msg.lower():
+                print("提示：API 额度已用完")
+            elif "tool" in error_msg.lower():
+                print("提示：工具调用可能不被该模型支持")
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "--test":
-        test_tool_calling()
-    else:
-        main()
+    main()
