@@ -1,7 +1,12 @@
-# 保质期管家🤖（Expiry Manager）
+# 保质期管家🤖 - Expiry Manager · 智能过期提醒与家庭共享
 
-- 全栈物品保质期管理应用，支持过期提醒、家庭共享、自然语言 AI Agent 管理
-- 通过 Vue 3 前端 + Node.js 后端 + Python AI 代理，让物品管理变得轻松又智能
+![Vue](https://img.shields.io/badge/Web-Vue_3-brightgreen)
+![Express](https://img.shields.io/badge/Backend-Node.js_Express-lightgrey)
+![Python](https://img.shields.io/badge/AI-Python-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
+一款全栈物品保质期管理应用，支持**过期提醒、家庭共享**以及**自然语言 AI Agent** 交互管理。  
+Vue 3 前端 + Node.js 后端 + Python 智能代理，让库存管理像聊天一样简单
 
 ## ✨ 功能特性
 
