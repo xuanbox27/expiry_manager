@@ -1,8 +1,17 @@
-# 保质期管家（Expiry Manager）
+# 保质期管家🤖（Expiry Manager）
 
-全栈物品保质期管理应用，支持过期提醒、家庭共享、自然语言 AI Agent 管理。
+- 全栈物品保质期管理应用，支持过期提醒、家庭共享、自然语言 AI Agent 管理
+- 通过 Vue 3 前端 + Node.js 后端 + Python AI 代理，让物品管理变得轻松又智能
 
-## 技术栈
+## ✨ 功能特性
+
+- 📦 **物品管理** — 添加、编辑、删除物品，记录购买日期、保质期、分类和状态。
+- ⏰ **过期提醒** — 定时检查即将过期的物品，支持配置提前通知天数。
+- 👨‍👩‍👧‍👦 **家庭共享** — 多成员共享物品清单，协同管理家庭库存。
+- 🤖 **AI 自然语言管理** — 通过对话式 Agent 直接操作物品：查询、添加、搜索、删除等。
+- 🔌 **多 LLM 提供商** — 支持硅基流动、智谱 AI、阿里云灵积，按需切换
+
+## 🛠️ 技术栈
 
 | 层级 | 技术 |
 |------|------|
@@ -114,9 +123,9 @@ DASHSCOPE_MODEL=qwen-plus
 }
 ```
 
-## AI Agent 功能
+## 🤖 AI Agent 详细说明
 
-`agent.py` 支持自然语言管理物品，基于 Function Calling 实现：
+`agent.py` 利用 Function Calling 技术，将自然语言指令转化为后端 API 调用。支持功能：
 
 - `get_all_items` — 查看所有物品
 - `get_expiring_items` — 查看即将过期物品
@@ -141,16 +150,18 @@ python agent.py
 - **智谱 AI**：GLM-4-Flash
 - **阿里云灵积**：通义千问 Plus
 
-切换方式：修改 `.env` 中的 `LLM_PROVIDER` 即可。
+切换 LLM 提供商:修改 .env 中的 LLM_PROVIDER 为对应值，并填入对应的 API Key
+
 
 ## 获取 USER_TOKEN
 
 1. 启动前后端，在浏览器打开 `http://localhost:5173`
-2. 登录账号
+2. 注册/登录一个账号
 3. F12 打开开发者工具 → Application → Local Storage
 4. 复制 `token` 的值到 `.env` 的 `USER_TOKEN`
+- ⚠️ Token 可能有过期时间，失效后请重新获取并更新。后续版本可考虑通过登录接口自动刷新
 
-## 数据存储
+## 💾数据存储
 
 后端使用 NeDB（嵌入式 NoSQL），数据文件位于 `server/data/`：
 
@@ -161,4 +172,19 @@ server/data/
 ├── familyMembers.db
 ├── notifications.db
 └── reminderSettings.db
+```
+
+## 🤝 贡献指南
+
+欢迎提交 Issue 或 PR！请遵循以下流程：
+1.Fork 本仓库
+2.创建特性分支 (git checkout -b feature/AmazingFeature)
+3.提交更改 (git commit -m 'Add some AmazingFeature')
+4.推送到分支 (git push origin feature/AmazingFeature)
+5.开启 Pull Request
+
+## 📄 许可证
+本项目基于 MIT 许可证开源，详情见 LICENSE 文件
+```
+💡 更多 AI Agent 的高级用法和自定义工具开发，请查看 AGENT_README.md
 ```
